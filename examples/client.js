@@ -9,7 +9,6 @@ rl.setPrompt(">");
 
 var client = mc.createClient({
   username: process.argv[2],
-  password: process.argv[3],
   host: process.argv[4].split(":")[0],
   port: process.argv[4].split(":")[1],
   verbose: true
