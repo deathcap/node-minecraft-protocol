@@ -33,8 +33,8 @@
     "batch": "~0.3.1"
   },
   "dependencies": {
-    "ursa": "~0.8.0",
     "superagent": "~0.10.0",
-    "buffer-equal": "0.0.0"
+    "buffer-equal": "0.0.0",
+    "forge": "git://github.com/roblabla/forge.git#master"
   }
 }
