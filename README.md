@@ -4,7 +4,7 @@ Parse and serialize minecraft packets, plus authentication and encryption.
 
 ## Features
 
- * Supports Minecraft version 1.5
+ * Supports Minecraft version 1.6.2
  * Parses all packets and emits events with packet fields as JavaScript
    objects.
  * Send a packet by supplying fields as a JavaScript object.
@@ -45,10 +45,15 @@ var client = mc.createClient({
 });
 client.on(0x03, function(packet) {
   // Listen for chat messages and echo them back.
-  if (packet.message.indexOf(client.session.username) !== -1) return;
-  client.write(0x03, {
-    message: packet.message,
-  });
+  var jsonMsg = JSON.parse(packet.message);
+  if (jsonMsg.translate == 'chat.type.announcement' || jsonMsg.translate == 'chat.type.text') {
+    var username = jsonMsg.using[0];
+    var msg = jsonMsg.using[1];
+    if (username === client.username) return;
+    client.write(0x03, {
+      message: msg
+    });
+  }
 });
 ```
 
@@ -82,7 +87,11 @@ server.on('login', function(client) {
     pitch: 0,
     onGround: true
   });
-  client.write(0x03, { message: 'Hello, ' + client.username });
+  var msg = { translate: 'chat.type.announcement', using [
+    'Server',
+    'Hello, ' + client.username
+  ]};
+  client.write(0x03, { message: JSON.stringify(msg) });
 });
 ```
 
@@ -143,6 +152,26 @@ Value looks like this:
 
 Where the key is the numeric metadata key and the value is the value of the 
 correct data type.
+
+#### propertyArray
+
+Included inside *Entity Properties (0x2C)* packets.
+
+```js
+[
+  { key: 'generic.maxHealth', value: 20, elementList: [] },
+  { key: 'generic.movementSpeed', value: 0.25, elementList: [] }
+]
+```
+
+Where elementList is an array with the following structure:
+
+```js
+[
+  { uuid: [ 123, 456, 78, 90 ], amount: 0.5, operation: 1 },
+  ...
+]
+```
 
 ## Testing
 
@@ -263,6 +292,23 @@ NODE_DEBUG="minecraft-protocol" node [...]
 ```
 
 ## History
+
+### 0.11.3
+
+ * packet 0x2c: packet writing fixed, UUID format simplified, tests updated
+
+### 0.11.2
+
+ * 1.6.2 support fixes: updated 0x2c packets to include `elementList` and added 0x85 *Tile Editor Open* packets
+
+### 0.11.1
+
+ * support minecraft protocol 1.6.2 / protocol version 74 (thanks [Matt Bell](https://github.com/mappum))
+
+### 0.11.0
+
+ * support minecraft protocol 1.6.1 / protocol version 73 (thanks [Matt Bell](https://github.com/mappum))
+   * *note:* chat packets have a new format (see [the examples](https://github.com/superjoe30/node-minecraft-protocol/tree/master/examples) for how to upgrade).
 
 ### 0.10.1
 

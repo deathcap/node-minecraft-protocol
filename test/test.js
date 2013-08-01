@@ -72,6 +72,7 @@ var values = {
     nbtData: new Buffer(0),
   }],
   'stringArray': ['hello', 'dude'],
+  'propertyArray': [{ key: 'generic.maxHealth', value: 1.5, elementList: [ { uuid: [ 123, 456, 78, 90 ], amount: 0.5, operation: 1 } ] }],
   'mapChunkBulk': {
     skyLightSent: true,
     compressedChunkData: new Buffer(1234),
@@ -99,7 +100,7 @@ var values = {
   'intArray8': [1, 2, 3, 4],
   'intVector': {x: 1, y: 2, z: 3},
   'byteVector': {x: 1, y: 2, z: 3},
-  'byteVectorArray': [{x: 1, y: 2, z: 3}],
+  'byteVectorArray': [{x: 1, y: 2, z: 3}]
 };
 
 describe("packets", function() {
@@ -293,10 +294,15 @@ describe("client", function() {
       client.on(0x03, function(packet) {
         chatCount += 1;
         assert.ok(chatCount <= 2);
+        var message = JSON.parse(packet.message);
         if (chatCount === 1) {
-          assert.strictEqual(packet.message, "<" + client.session.username + ">" + " hello everyone; I have logged in.");
+          assert.strictEqual(message.translate, "chat.type.text");
+          assert.strictEqual(message.using[0], client.session.username);
+          assert.strictEqual(message.using[1], "hello everyone; I have logged in.");
         } else if (chatCount === 2) {
-          assert.strictEqual(packet.message, "[Server] hello");
+          assert.strictEqual(message.translate, "chat.type.announcement");
+          assert.strictEqual(message.using[0], "Server");
+          assert.strictEqual(message.using[1], "hello");
           done();
         }
       });
@@ -327,10 +333,15 @@ describe("client", function() {
       client.on(0x03, function(packet) {
         chatCount += 1;
         assert.ok(chatCount <= 2);
+        var message = JSON.parse(packet.message);
         if (chatCount === 1) {
-          assert.strictEqual(packet.message, "<Player>" + " hello everyone; I have logged in.");
+          assert.strictEqual(message.translate, "chat.type.text");
+          assert.strictEqual(message.using[0], "Player");
+          assert.strictEqual(message.using[1], "hello everyone; I have logged in.");
         } else if (chatCount === 2) {
-          assert.strictEqual(packet.message, "[Server] hello");
+          assert.strictEqual(message.translate, "chat.type.announcement");
+          assert.strictEqual(message.using[0], "Server");
+          assert.strictEqual(message.using[1], "hello");
           done();
         }
       });
@@ -363,7 +374,10 @@ describe("client", function() {
         });
       });
       client.on(0x03, function(packet) {
-        assert.strictEqual(packet.message, "<Player>" + " hello everyone; I have logged in.");
+        var message = JSON.parse(packet.message);
+        assert.strictEqual(message.translate, "chat.type.text");
+        assert.strictEqual(message.using[0], "Player");
+        assert.strictEqual(message.using[1], "hello everyone; I have logged in.");
         setTimeout(function() {
           done();
         }, SURVIVE_TIME);
