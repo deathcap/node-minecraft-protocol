@@ -8,6 +8,10 @@ var EventEmitter = require('events').EventEmitter
         , protocol = require('./lib/protocol')
         , Client = require('./lib/client')
         , Server = require('./lib/server')
+        , Yggdrasil = require('./lib/yggdrasil.js')
+        , getSession = Yggdrasil.getSession
+        , validateSession = Yggdrasil.validateSession
+        , joinServer = Yggdrasil.joinServer
         , states = protocol.states
         , debug = protocol.debug
         ;
@@ -229,20 +233,25 @@ function createClient(options) {
   assert.ok(options, "options is required");
   var port = options.port || 25565;
   var host = options.host || 'localhost';
+  var clientToken = options.clientToken || Yggdrasil.generateUUID();
+  var accessToken = options.accessToken || null;
+
   assert.ok(options.username, "username is required");
-  var haveCredentials = options.password != null;
+  var haveCredentials = options.password != null || (clientToken != null && accessToken != null);
   var keepAlive = options.keepAlive == null ? true : options.keepAlive;
+
 
   var client = new Client(false);
   client.on('connect', onConnect);
-  if (keepAlive)
-    client.on([states.PLAY, 0x00], onKeepAlive);
-  client.once([states.LOGIN, 0x01], onEncryptionKeyResponse);
+  if (keepAlive) client.on([states.PLAY, 0x00], onKeepAlive);
+  client.once([states.LOGIN, 0x01], onEncryptionKeyRequest);
   client.once([states.LOGIN, 0x02], onLogin);
 
   if (haveCredentials) {
     // make a request to get the case-correct username before connecting.
-    getLoginSession(options.username, options.password, function(err, session) {
+    var cb = function(err, session) {
+      console.log("Got here");
+      console.log(session);
       if (err) {
         client.emit('error', err);
       } else {
@@ -251,7 +260,10 @@ function createClient(options) {
         client.emit('session');
         client.connect(port, host);
       }
-    });
+    };
+    
+    if (accessToken != null) getSession(options.username, accessToken, options.clientToken, true, cb);
+    else getSession(options.username, options.password, options.clientToken, false, cb);
   } else {
     // assume the server is in offline mode and just go for it.
     client.username = options.username;
@@ -315,28 +327,7 @@ function createClient(options) {
         hash.update(packet.publicKey);
 
         var digest = mcHexDigest(hash);
-        var request = superagent.get("http://session.minecraft.net/game/joinserver.jsp");
-        request.query({
-          user: client.session.username,
-          sessionId: client.session.id,
-          serverId: digest,
-        });
-        request.end(function(err, resp) {
-          var myErr;
-          if (err) {
-            cb(err);
-          } else if (resp.serverError) {
-            myErr = new Error("session.minecraft.net is broken: " + resp.status);
-            myErr.code = 'EMCSESSION500';
-            cb(myErr);
-          } else if (resp.clientError) {
-            myErr = new Error("session.minecraft.net rejected request: " + resp.status + " " + resp.text);
-            myErr.code = 'EMCSESSION400';
-            cb(myErr);
-          } else {
-            cb();
-          }
-        });
+        joinServer(this.username, digest, accessToken, cb);
       }
 
       function sendEncryptionKeyResponse() {
@@ -356,13 +347,6 @@ function createClient(options) {
   function onLogin(packet) {
     client.uuid = packet.uuid;
     client.username = packet.username;
-  }
-
-  function onEncryptionKeyResponse(packet) {
-    assert.strictEqual(packet.sharedSecret.length, 0);
-    assert.strictEqual(packet.verifyToken.length, 0);
-    client.encryptionEnabled = true;
-    client.write(0xcd, {payload: 0});
   }
 }
 
@@ -407,43 +391,4 @@ function mcHexDigest(hash) {
       }
     }
   }
-}
-
-function getLoginSession(email, password, cb) {
-  var req = superagent.post("https://login.minecraft.net");
-  req.type('form');
-  req.send({
-    user: email,
-    password: password,
-    version: protocol.sessionVersion,
-  });
-  req.end(function(err, resp) {
-    var myErr;
-    if (err) {
-      cb(err);
-    } else if (resp.serverError) {
-      myErr = new Error("login.minecraft.net is broken: " + resp.status);
-      myErr.code = 'ELOGIN500';
-      cb(myErr);
-    } else if (resp.clientError) {
-      myErr = new Error("login.minecraft.net rejected request: " + resp.status + " " + resp.text);
-      myErr.code = 'ELOGIN400';
-      cb(myErr);
-    } else {
-      var values = resp.text.split(':');
-      var session = {
-        currentGameVersion: values[0],
-        username: values[2],
-        id: values[3],
-        uid: values[4],
-      };
-      if (session.id && session.username) {
-        cb(null, session);
-      } else {
-        myErr = new Error("login.minecraft.net rejected request: " + resp.status + " " + resp.text);
-        myErr.code = 'ELOGIN400';
-        cb(myErr);
-      }
-    }
-  });
 }
