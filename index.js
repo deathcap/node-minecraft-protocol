@@ -250,13 +250,12 @@ function createClient(options) {
   if (haveCredentials) {
     // make a request to get the case-correct username before connecting.
     var cb = function(err, session) {
-      console.log("Got here");
-      console.log(session);
       if (err) {
         client.emit('error', err);
       } else {
         client.session = session;
         client.username = session.username;
+        accessToken = session.accessToken;
         client.emit('session');
         client.connect(port, host);
       }
@@ -327,7 +326,7 @@ function createClient(options) {
         hash.update(packet.publicKey);
 
         var digest = mcHexDigest(hash);
-        joinServer(this.username, digest, accessToken, cb);
+        joinServer(this.username, digest, accessToken, client.session.selectedProfile.id, cb);
       }
 
       function sendEncryptionKeyResponse() {
@@ -340,11 +339,13 @@ function createClient(options) {
           sharedSecret: encryptedSharedSecretBuffer,
           verifyToken: encryptedVerifyTokenBuffer,
         });
+        client.encryptionEnabled = true;
       }
     }
   }
   
   function onLogin(packet) {
+    client.state = states.PLAY;
     client.uuid = packet.uuid;
     client.username = packet.username;
   }
