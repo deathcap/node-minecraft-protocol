@@ -2,31 +2,32 @@ var readline = require('readline');
 var color = require("ansi-color").set;
 var mc = require('../');
 var states = mc.protocol.states;
-var c = new Buffer("§", "utf-8");
-
-var colorCodes = new Array();
-colorCodes[c.toString('utf-8') + '0'] = 'black+white_bg';
-colorCodes[c.toString('utf-8') + '1'] = 'white+blue_bg';
-colorCodes[c.toString('utf-8') + '2'] = 'green';
-colorCodes[c.toString('utf-8') + '3'] = 'blue';
-colorCodes[c.toString('utf-8') + '4'] = 'red';
-colorCodes[c.toString('utf-8') + '5'] = 'magenta';
-colorCodes[c.toString('utf-8') + '6'] = 'yellow';
-colorCodes[c.toString('utf-8') + '7'] = 'white';
-colorCodes[c.toString('utf-8') + '8'] = 'white';
-colorCodes[c.toString('utf-8') + '9'] = 'blue';
-colorCodes[c.toString('utf-8') + 'a'] = 'green';
-colorCodes[c.toString('utf-8') + 'b'] = 'cyan';
-colorCodes[c.toString('utf-8') + 'c'] = 'red';
-colorCodes[c.toString('utf-8') + 'd'] = 'magenta';
-colorCodes[c.toString('utf-8') + 'e'] = 'yellow';
-colorCodes[c.toString('utf-8') + 'f'] = 'white';
-colorCodes[c.toString('utf-8') + 'k'] = 'blink';
-colorCodes[c.toString('utf-8') + 'l'] = 'bold';
-colorCodes[c.toString('utf-8') + 'n'] = 'underline';
-colorCodes[c.toString('utf-8') + 'r'] = 'white';
 
 var colors = new Array();
+colors["black"] = 'black+white_bg';
+colors["dark_blue"] = 'blue';
+colors["dark_green"] = 'green';
+colors["dark_aqua"] = 'cyan'
+colors["dark_red"] = 'red'
+colors["dark_purple"] = 'magenta'
+colors["gold"] = 'yellow'
+colors["gray"] = 'black+white_bg'
+colors["dark_gray"] = 'black+white_bg'
+colors["blue"] = 'blue'
+colors["green"] = 'green'
+colors["aqua"] = 'cyan'
+colors["red"] = 'red'
+colors["light_purple"] = 'magenta'
+colors["yellow"] = 'yellow'
+colors["white"] = 'white'
+colors["obfuscated"] = 'blink'
+colors["bold"] = 'bold'
+colors["strikethrough"] = ''
+colors["underlined"] = 'underlined'
+colors["italic"] = ''
+colors["reset"] = 'white+black_bg'
+
+var dictionary = {};
 
 var rl = readline.createInterface({
     input: process.stdin,
@@ -72,7 +73,7 @@ var client = mc.createClient({
     password: passwd
 });
  
-client.on(0xff, function(packet) {
+client.on([states.PLAY, 0x40], function(packet) {
     console.info(color('Kicked for ' + packet.reason, "blink+red"));
     process.exit(1);
 });
@@ -101,30 +102,39 @@ rl.on('line', function(line) {
  
 client.on([states.PLAY, 0x02], function(packet) {
     var j = JSON.parse(packet.message);
-    var chat = "";
-    var colorWith = "";
-    if (j.color !== null) colorWith = colors[j.color];
-    if (j.text !== null) chat += j.text;
-    else if (j.translate !== null) chat += j.translate;
-    for (var s in j.extra) {
-        if (typeof s === "string") {
-            chat += s;
-        } else {
-            s.
-        }
-    }
-    
-    console.log(j);
-    for (var s in j.extra) {
-        if (typeof s === "string") {
-            chat += s;
-        } else {
-            chat += color(s.text, s.color);
-        }
-    }
+    var chat = parseChat(j, {});
     console.info(chat);
 });
 
-function parseChat(chatObj) {
-    
+function parseChat(chatObj, parentState) {
+  function getColorize(parentState) {
+    var myColor = "";
+    if ('color' in parentState) myColor += colors[parentState.color] + "+";
+    if (parentState.bold) myColor += "bold+";
+    if (parentState.underlined) myColor += "underline+";
+    if (parentState.obfuscated) myColor += "obfuscated+";
+    if (myColor.length > 0) myColor = myColor.slice(0,-1);
+    return myColor;
+  }
+  if (typeof chatObj === "string") {
+    return color(chatObj, getColorize(parentState));
+  } else {
+    var chat = "";
+    if ('color' in chatObj) parentState.color = chatObj['color'];
+    if ('bold' in chatObj) parentState.bold = chatObj['bold'];
+    if ('italic' in chatObj) parentState.italic = chatObj['italic'];
+    if ('underlined' in chatObj) parentState.underlined = chatObj['underlined'];
+    if ('strikethrough' in chatObj) parentState.strikethrough = chatObj['strikethrough'];
+    if ('obfuscated' in chatObj) parentState.obfuscated = chatObj['obfuscated'];
+
+    if ('text' in chatObj) {
+      chat += color(chatObj.text, getColorize(parentState));
+    } else if ('translate' in chatObj) {
+      // Implement translations
+    }
+    for (var i in chatObj.extra) {
+      chat += parseChat(chatObj.extra[i], parentState);
+    }
+    return chat;
+  }
 }
