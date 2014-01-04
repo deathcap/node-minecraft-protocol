@@ -44,10 +44,10 @@ var rl = readline.createInterface({
 });
  
 function print_help() {
-    console.log("usage: node minechat.js <hostname> <user> <password>");
+    console.log("usage: node minechat.js <hostname> <user> [<password>]");
 }
  
-if (process.argv.length < 5) {
+if (process.argv.length < 4) {
     console.log("Too few arguments!");
     print_help();
     process.exit(1);
@@ -72,7 +72,6 @@ if (host.indexOf(':') != -1) {
  
 console.log("connecting to " + host + ":" + port);
 console.log("user: " + user);
-console.log("passwd: " + Array(passwd.length).join('*'));
  
 var client = mc.createClient({
     host: host,
