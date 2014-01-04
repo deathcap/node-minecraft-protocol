@@ -48,7 +48,6 @@ function createServer(options) {
   server.on("connection", function(client) {
     client.once([states.HANDSHAKING, 0x00], onHandshake);
     client.once([states.LOGIN, 0x00], onLogin);
-    client.once([states.LOGIN, 0x01], onEncryptionKeyResponse);
     client.once([states.STATUS, 0x00], onPing);
     client.on('end', onEnd);
 
@@ -112,40 +111,36 @@ function createServer(options) {
       };
 
       client.write(0x00, {response: JSON.stringify(response)});
-      client.once(0x01, function(packet) {
-        client.write(0x01, packet.time);
+      client.once([states.STATUS, 0x01], function(packet) {
+        client.write(0x01, { time: packet.time });
         client.end();
       });
     }
 
     function onLogin(packet) {
       client.username = packet.username;
-      // That thing down there probably doesn't work anymore.
-      // Everyone has to encrypt.
-      /*var isException = !!server.onlineModeExceptions[client.username.toLowerCase()];
-       var needToVerify = (onlineMode && ! isException) || (! onlineMode && isException);
-       var serverId;
-       if (needToVerify) {
-       serverId = crypto.randomBytes(4).toString('hex');
-       } else {
-       serverId = '-';
-       }
-       if (encryptionEnabled) {*/
-      var serverId = crypto.randomBytes(4).toString('hex');
-      client.verifyToken = crypto.randomBytes(4);
-      var publicKeyStrArr = serverKey.toPublicPem("utf8").split("\n");
-      var publicKeyStr = "";
-      for (var i = 1; i < publicKeyStrArr.length - 2; i++) {
-        publicKeyStr += publicKeyStrArr[i]
+      var isException = !!server.onlineModeExceptions[client.username.toLowerCase()];
+      var needToVerify = (onlineMode && ! isException) || (! onlineMode && isException);
+      if (encryptionEnabled || needToVerify) {
+        var serverId = crypto.randomBytes(4).toString('hex');
+        client.verifyToken = crypto.randomBytes(4);
+        var publicKeyStrArr = serverKey.toPublicPem("utf8").split("\n");
+        var publicKeyStr = "";
+        for (var i = 1; i < publicKeyStrArr.length - 2; i++) {
+          publicKeyStr += publicKeyStrArr[i]
+        }
+        client.publicKey = new Buffer(publicKeyStr, 'base64');
+        hash = crypto.createHash("sha1");
+        hash.update(serverId);
+        client.write(0x01, {
+          serverId: serverId,
+          publicKey: client.publicKey,
+          verifyToken: client.verifyToken
+        });
+        client.once([states.LOGIN, 0x01], onEncryptionKeyResponse);
+      } else {
+        loginClient();
       }
-      client.publicKey = new Buffer(publicKeyStr, 'base64');
-      hash = crypto.createHash("sha1");
-      hash.update(serverId);
-      client.write(0x01, {
-        serverId: serverId,
-        publicKey: client.publicKey,
-        verifyToken: client.verifyToken
-      });
     }
 
     function onHandshake(packet) {
@@ -167,10 +162,6 @@ function createServer(options) {
       client.decipher = crypto.createDecipheriv('aes-128-cfb8', sharedSecret, sharedSecret);
       hash.update(sharedSecret);
       hash.update(client.publicKey);
-      client.write(0xFC, {
-        sharedSecret: new Buffer(0),
-        verifyToken: new Buffer(0)
-      });
       client.encryptionEnabled = true;
 
       var isException = !!server.onlineModeExceptions[client.username.toLowerCase()];
@@ -180,37 +171,15 @@ function createServer(options) {
 
       function verifyUsername() {
         var digest = mcHexDigest(hash);
-        var request = superagent.get("http://session.minecraft.net/game/checkserver.jsp");
-        request.query({
-          user: client.username,
-          serverId: digest
-        });
-        request.end(function(err, resp) {
-          var myErr;
-          if (err) {
-            server.emit('error', err);
-            client.end('McSessionUnavailable');
-          } else if (resp.serverError) {
-            myErr = new Error("session.minecraft.net is broken: " + resp.status);
-            myErr.code = 'EMCSESSION500';
-            server.emit('error', myErr);
-            client.end('McSessionDown');
-          } else if (resp.serverError) {
-            myErr = new Error("session.minecraft.net rejected request: " + resp.status);
-            myErr.code = 'EMCSESSION400';
-            server.emit('error', myErr);
-            client.end('McSessionRejectedAuthRequest');
-          } else if (resp.text !== "YES") {
-            client.end('FailedToVerifyUsername');
-          } else {
-            loginClient();
-          }
+        validateSession(client.username, digest, function(err, uuid) {
+          client.UUID = uuid;
+          loginClient();
         });
       }
     }
 
     function loginClient() {
-      client.write(0x02, {UUID: 0, username: client.username});
+      client.write(0x02, {uuid: (client.UUID | 0).toString(10), username: client.username});
       client.state = states.PLAY;
       loggedIn = true;
       startKeepAlive();
