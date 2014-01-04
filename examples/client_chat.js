@@ -139,9 +139,10 @@ function parseChat(chatObj, parentState) {
       chat += color(chatObj.text, getColorize(parentState));
     } else if ('translate' in chatObj && dictionary.hasOwnProperty(chatObj.translate)) {
       var args = [dictionary[chatObj.translate]];
-      for (var s in chatObj["with"]) {
-        args.push(parseChat(s));
-      }
+      chatObj['with'].forEach(function(s) {
+        args.push(parseChat(s, parentState));
+      });
+
       chat += color(util.format.apply(this, args), getColorize(parentState));
     }
     for (var i in chatObj.extra) {
