@@ -2,6 +2,7 @@ var readline = require('readline');
 var color = require("ansi-color").set;
 var mc = require('../');
 var states = mc.protocol.states;
+var util = require('util');
 
 var colors = new Array();
 colors["black"] = 'black+white_bg';
@@ -28,6 +29,13 @@ colors["italic"] = ''
 colors["reset"] = 'white+black_bg'
 
 var dictionary = {};
+dictionary["chat.stream.emote"] = "(%s) * %s %s";
+dictionary["chat.stream.text"] = "(%s) <%s> %s";
+dictionary["chat.type.achievement"] = "%s has just earned the achievement %s";
+dictionary["chat.type.admin"] = "[%s: %s]";
+dictionary["chat.type.announcement"] = "[%s] %s";
+dictionary["chat.type.emote"] = "* %s %s";
+dictionary["chat.type.text"] = "<%s> %s";
 
 var rl = readline.createInterface({
     input: process.stdin,
@@ -129,8 +137,12 @@ function parseChat(chatObj, parentState) {
 
     if ('text' in chatObj) {
       chat += color(chatObj.text, getColorize(parentState));
-    } else if ('translate' in chatObj) {
-      // Implement translations
+    } else if ('translate' in chatObj && dictionary.hasOwnProperty(chatObj.translate)) {
+      var args = [dictionary[chatObj.translate]];
+      for (var s in chatObj["with"]) {
+        args.push(parseChat(s));
+      }
+      chat += color(util.format.apply(this, args), getColorize(parentState));
     }
     for (var i in chatObj.extra) {
       chat += parseChat(chatObj.extra[i], parentState);
