@@ -50,6 +50,7 @@ var values = {
   'int': 123456,
   'short': -123,
   'ushort': 123,
+  'varint': 25992,
   'byte': -10,
   'ubyte': 8,
   'string': "hi hi this is my client string",
@@ -102,7 +103,9 @@ var values = {
   'intArray8': [1, 2, 3, 4],
   'intVector': {x: 1, y: 2, z: 3},
   'byteVector': {x: 1, y: 2, z: 3},
-  'byteVectorArray': [{x: 1, y: 2, z: 3}]
+  'byteVectorArray': [{x: 1, y: 2, z: 3}],
+  'statisticArray': {"stuff": 13, "anotherstuff": 6392},
+  'matchArray': ["hallo", "heya"]
 };
 
 describe("packets", function() {
@@ -127,45 +130,51 @@ describe("packets", function() {
     client.end();
   });
   var packetId, packetInfo, field;
-  for(packetId in protocol.packets) {
-    if (!protocol.packets.hasOwnProperty(packetId)) continue;
-
-    packetId = parseInt(packetId, 10);
-    packetInfo = protocol.packets[packetId];
-    it("0x" + zfill(parseInt(packetId, 10).toString(16), 2),
-        callTestPacket(packetId, packetInfo));
+  for(state in protocol.packets) {
+    if (!protocol.packets.hasOwnProperty(state)) continue;
+    for(packetId in protocol.packets[state].toServer) {
+      if (!protocol.packets[state].toServer.hasOwnProperty(packetId)) continue;
+      packetId = parseInt(packetId, 10);
+      packetInfo = protocol.get(packetId, state, true);
+      it(state + ",ServerBound,0x" + zfill(parseInt(packetId, 10).toString(16), 2),
+        callTestPacket(packetId, packetInfo, state, true));
+    }
+    for(packetId in protocol.packets[state].toClient) {
+      if (!protocol.packets[state].toClient.hasOwnProperty(packetId)) continue;
+      packetId = parseInt(packetId, 10);
+      packetInfo = protocol.get(packetId, state, false);
+      it(state + ",ClientBound,0x" + zfill(parseInt(packetId, 10).toString(16), 2),
+        callTestPacket(packetId, packetInfo, state, false));
+    }
   }
-  function callTestPacket(packetId, packetInfo) {
+  function callTestPacket(packetId, packetInfo, state, toServer) {
     return function(done) {
-      var batch = new Batch();
-      batch.push(function(done) {
-        testPacket(packetId, protocol.get(packetId, false), done);
-      });
-      batch.push(function(done) {
-        testPacket(packetId, protocol.get(packetId, true), done);
-      });
-      batch.end(function(err, results) {
-        done();
-      });
-    };
+      client.state = state;
+      serverClient.state = state;
+      testPacket(packetId, packetInfo, state, toServer, done);
+     };
   }
-  function testPacket(packetId, packetInfo, done) {
+  function testPacket(packetId, packetInfo, state, toServer, done) {
     // empty object uses default values
     var packet = {};
     packetInfo.forEach(function(field) {
       packet[field.name] = values[field.type];
     });
-    serverClient.once(packetId, function(receivedPacket) {
-      delete receivedPacket.id;
-      assertPacketsMatch(packet, receivedPacket);
-      client.once(packetId, function(clientReceivedPacket) {
-        delete clientReceivedPacket.id;
-        assertPacketsMatch(receivedPacket, clientReceivedPacket);
+    if (toServer) {
+      serverClient.once([state, packetId], function(receivedPacket) {
+        delete receivedPacket.id;
+        assertPacketsMatch(packet, receivedPacket);
         done();
       });
-      serverClient.write(packetId, receivedPacket);
-    });
-    client.write(packetId, packet);
+      client.write(packetId, packet);
+    } else {
+      client.once([state, packetId], function(receivedPacket) {
+        delete receivedPacket.id;
+        assertPacketsMatch(packet, receivedPacket);
+        done();
+      });
+      serverClient.write(packetId, packet);
+    }
   }
   function assertPacketsMatch(p1, p2) {
     packetInfo.forEach(function(field) {
