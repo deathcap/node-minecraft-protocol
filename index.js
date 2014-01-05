@@ -208,6 +208,7 @@ function createClient(options) {
   assert.ok(options.username, "username is required");
   var haveCredentials = options.password != null || (clientToken != null && accessToken != null);
   var keepAlive = options.keepAlive == null ? true : options.keepAlive;
+  var shouldParsePayload = options.parsePayload == null ? true : options.parsePayload;
 
 
   var client = new Client(false);
@@ -317,6 +318,8 @@ function createClient(options) {
     client.state = states.PLAY;
     client.uuid = packet.uuid;
     client.username = packet.username;
+    if (!shouldParsePayload)
+      client.shouldParsePayload = false; // after handshake sequence completes
   }
 }
 
