@@ -1,5 +1,6 @@
 var mc = require('../')
   , protocol = mc.protocol
+  , states = protocol.states
   , Client = mc.Client
   , Server = mc.Server
   , spawn = require('child_process').spawn
@@ -18,26 +19,31 @@ var mc = require('../')
 
 var defaultServerProps = {
   'generator-settings': "",
+  'op-permission-level': '4',
   'allow-nether': 'true',
   'level-name': 'world',
   'enable-query': 'false',
   'allow-flight': 'false',
+  'announce-player-achievements': true,
   'server-port': '25565',
   'level-type': 'DEFAULT',
   'enable-rcon': 'false',
+  'force-gamemode': 'false',
   'level-seed': "",
   'server-ip': "",
   'max-build-height': '256',
   'spawn-npcs': 'true',
   'white-list': 'false',
   'spawn-animals': 'true',
-  'snooper-enabled': 'true',
   'hardcore': 'false',
-  'texture-pack': '',
+  'snooper-enabled': 'true',
   'online-mode': 'true',
+  'resource-pack': '',
   'pvp': 'true',
   'difficulty': '1',
+  'enable-command-block': 'false',
   'gamemode': '0',
+  'player-idle-timeout': '0',
   'max-players': '20',
   'spawn-monsters': 'true',
   'generate-structures': 'true',
@@ -191,7 +197,7 @@ describe("packets", function() {
 });
 
 describe("client", function() {
-  this.timeout(20000);
+  this.timeout(40000);
 
   var mcServer;
   function startServer(propOverrides, done) {
@@ -247,7 +253,7 @@ describe("client", function() {
         //console.error("[MC]", line);
       });
       function onLine(line) {
-        if (/\[INFO\] Done/.test(line)) {
+        if (/\[Server thread\/INFO\]: Done/.test(line)) {
           mcServer.removeListener('line', onLine);
           done();
         }
@@ -274,14 +280,14 @@ describe("client", function() {
         assert.ok(results.latency >= 0);
         assert.ok(results.latency <= 1000);
         delete results.latency;
-        assert.deepEqual(results, {
-          prefix: "§1",
-          protocol: protocol.version,
-          version: protocol.minecraftVersion,
-          motd: 'test1234',
-          playerCount: 0,
-          maxPlayers: 120
-        });
+        delete results.favicon; // too lazy to figure it out
+/*        assert.deepEqual(results, {
+          version: {
+            name: '1.7.4',
+            protocol: 4
+          },
+          description: { text: "test1234" }
+        });*/
         done();
       });
     });
@@ -293,34 +299,42 @@ describe("client", function() {
         password: process.env.MC_PASSWORD,
       });
       mcServer.on('line', function(line) {
-        var match = line.match(/\[INFO\] <(.+?)> (.+)$/);
+        var match = line.match(/\[Server thread\/INFO\]: <(.+?)> (.+)/);
         if (! match) return;
         assert.strictEqual(match[1], client.session.username);
         assert.strictEqual(match[2], "hello everyone; I have logged in.");
         mcServer.stdin.write("say hello\n");
       });
       var chatCount = 0;
-      client.on(0x01, function(packet) {
+      client.on([states.PLAY, 0x01], function(packet) {
         assert.strictEqual(packet.levelType, 'default');
         assert.strictEqual(packet.difficulty, 1);
         assert.strictEqual(packet.dimension, 0);
         assert.strictEqual(packet.gameMode, 0);
-        client.write(0x03, {
+        client.write(0x01, {
           message: "hello everyone; I have logged in."
         });
       });
-      client.on(0x03, function(packet) {
+      client.on([states.PLAY, 0x02], function(packet) {
         chatCount += 1;
         assert.ok(chatCount <= 2);
         var message = JSON.parse(packet.message);
         if (chatCount === 1) {
           assert.strictEqual(message.translate, "chat.type.text");
-          assert.strictEqual(message.using[0], client.session.username);
-          assert.strictEqual(message.using[1], "hello everyone; I have logged in.");
+          assert.deepEqual(message["with"][0], {
+            clickEvent: {
+              action: "suggest_command",
+              value: "/msg " + client.session.username + " "
+            },
+            text: client.session.username
+          });
+          assert.strictEqual(message["with"][1], "hello everyone; I have logged in.");
         } else if (chatCount === 2) {
           assert.strictEqual(message.translate, "chat.type.announcement");
-          assert.strictEqual(message.using[0], "Server");
-          assert.strictEqual(message.using[1], "hello");
+          assert.strictEqual(message["with"][0], "Server");
+          assert.deepEqual(message["with"][1], { text: "",
+            extra: ["hello"]
+          });
           done();
         }
       });
@@ -332,34 +346,42 @@ describe("client", function() {
         username: 'Player',
       });
       mcServer.on('line', function(line) {
-        var match = line.match(/\[INFO\] <(.+?)> (.+)$/);
+        var match = line.match(/\[Server thread\/INFO\]: <(.+?)> (.+)/);
         if (! match) return;
         assert.strictEqual(match[1], 'Player');
         assert.strictEqual(match[2], "hello everyone; I have logged in.");
         mcServer.stdin.write("say hello\n");
       });
       var chatCount = 0;
-      client.on(0x01, function(packet) {
+      client.on([states.PLAY, 0x01], function(packet) {
           assert.strictEqual(packet.levelType, 'default');
           assert.strictEqual(packet.difficulty, 1);
           assert.strictEqual(packet.dimension, 0);
           assert.strictEqual(packet.gameMode, 0);
-          client.write(0x03, {
+          client.write(0x01, {
             message: "hello everyone; I have logged in."
           });
       });
-      client.on(0x03, function(packet) {
+      client.on([states.PLAY, 0x02], function(packet) {
         chatCount += 1;
         assert.ok(chatCount <= 2);
         var message = JSON.parse(packet.message);
         if (chatCount === 1) {
           assert.strictEqual(message.translate, "chat.type.text");
-          assert.strictEqual(message.using[0], "Player");
-          assert.strictEqual(message.using[1], "hello everyone; I have logged in.");
+          assert.deepEqual(message["with"][0], {
+            clickEvent: {
+              action: "suggest_command",
+              value: "/msg Player "
+            },
+            text: "Player"
+          });
+          assert.strictEqual(message["with"][1], "hello everyone; I have logged in.");
         } else if (chatCount === 2) {
           assert.strictEqual(message.translate, "chat.type.announcement");
-          assert.strictEqual(message.using[0], "Server");
-          assert.strictEqual(message.using[1], "hello");
+          assert.strictEqual(message["with"][0], "Server");
+          assert.deepEqual(message["with"][1], { text: "",
+            extra: ["hello"]
+          });
           done();
         }
       });
@@ -371,8 +393,8 @@ describe("client", function() {
         username: 'Player',
       });
       var gotKicked = false;
-      client.on(0xff, function(packet) {
-        assert.strictEqual(packet.reason, "Failed to verify username!");
+      client.on([states.LOGIN, 0x00], function(packet) {
+        assert.strictEqual(packet.reason, '"Failed to verify username!"');
         gotKicked = true;
       });
       client.on('end', function() {
@@ -386,22 +408,25 @@ describe("client", function() {
       var client = mc.createClient({
         username: 'Player',
       });
-      client.on(0x01, function(packet) {
-        client.write(0x03, {
+      client.on([states.PLAY, 0x01], function(packet) {
+        client.write(0x01, {
           message: "hello everyone; I have logged in."
         });
       });
-      client.on(0x03, function(packet) {
+      client.on([states.PLAY, 0x02], function(packet) {
         var message = JSON.parse(packet.message);
         assert.strictEqual(message.translate, "chat.type.text");
-        assert.strictEqual(message.using[0], "Player");
-        assert.strictEqual(message.using[1], "hello everyone; I have logged in.");
+        assert.deepEqual(message["with"][0], {
+          clickEvent: {
+            action: "suggest_command",
+            value: "/msg Player "
+          },
+          text: "Player"
+        });
+        assert.strictEqual(message["with"][1], "hello everyone; I have logged in.");
         setTimeout(function() {
           done();
         }, SURVIVE_TIME);
-      });
-      client.on(0x0d, function(packet) {
-        assert.ok(packet.stance > packet.y, "stance should be > y");
       });
     });
   });
@@ -491,12 +516,16 @@ describe("mc-server", function() {
         assert.ok(results.latency <= 1000);
         delete results.latency;
         assert.deepEqual(results, {
-          prefix: "§1",
-          protocol: protocol.version,
-          version: protocol.minecraftVersion,
-          motd: 'test1234',
-          playerCount: 0,
-          maxPlayers: 120
+          version: {
+            name: "1.7.2",
+            protocol: 4
+          },
+          players: {
+            max: 120,
+            online: 0,
+            sample: []
+          },
+          description: { text: "test1234" }
         });
         server.close();
       });
@@ -523,7 +552,7 @@ describe("mc-server", function() {
         difficulty: 2,
         maxPlayers: server.maxPlayers
       });
-      client.on(0x03, function(packet) {
+      client.on([states.PLAY, 0x01], function(packet) {
         var message = '<' + client.username + '>' + ' ' + packet.message;
         broadcast(message);
       });
@@ -531,31 +560,31 @@ describe("mc-server", function() {
     server.on('close', done);
     server.on('listening', function() {
       var player1 = mc.createClient({ username: 'player1' });
-      player1.on(0x01, function(packet) {
+      player1.on([states.PLAY, 0x01], function(packet) {
         assert.strictEqual(packet.gameMode, 1);
         assert.strictEqual(packet.levelType, 'default');
         assert.strictEqual(packet.dimension, 0);
         assert.strictEqual(packet.difficulty, 2);
-        player1.once(0x03, function(packet) {
-          assert.strictEqual(packet.message, 'player2 joined the game.');
-          player1.once(0x03, function(packet) {
-            assert.strictEqual(packet.message, '<player2> hi');
-            player2.once(0x03, fn);
+        player1.once(0x02, function(packet) {
+          assert.strictEqual(packet.message, '{"text":"player2 joined the game."}');
+          player1.once(0x02, function(packet) {
+            assert.strictEqual(packet.message, '{"text":"<player2> hi"}');
+            player2.once(0x02, fn);
             function fn(packet) {
-              if (/^<player2>/.test(packet.message)) {
-                player2.once(0x03, fn);
+              if (/<player2>/.test(packet.message)) {
+                player2.once(0x02, fn);
                 return;
               }
-              assert.strictEqual(packet.message, '<player1> hello');
-              player1.once(0x03, function(packet) {
-                assert.strictEqual(packet.message, 'player2 left the game.');
+              assert.strictEqual(packet.message, '{"text":"<player1> hello"}');
+              player1.once(0x02, function(packet) {
+                assert.strictEqual(packet.message, '{"text":"player2 left the game."}');
                 player1.end();
               });
               player2.end();
             }
-            player1.write(0x03, { message: "hello" } );
+            player1.write(0x01, { message: "hello" } );
           });
-          player2.write(0x03, { message: "hi" } );
+          player2.write(0x01, { message: "hi" } );
         });
         var player2 = mc.createClient({ username: 'player2' });
       });
@@ -567,7 +596,7 @@ describe("mc-server", function() {
         if (!server.clients.hasOwnProperty(clientId)) continue;
 
         client = server.clients[clientId];
-        if (client !== exclude) client.write(0x03, { message: message });
+        if (client !== exclude) client.write(0x02, { message: JSON.stringify({text: message})});
       }
     }
   });
@@ -619,7 +648,7 @@ describe("mc-server", function() {
     });
     server.on('listening', function() {
       var client = mc.createClient({ username: 'lalalal', });
-      client.on(0x01, function() {
+      client.on([states.PLAY, 0x01], function() {
         server.close();
       });
     });

@@ -85,9 +85,19 @@ client.on([states.PLAY, 0x40], function(packet) {
     process.exit(1);
 });
  
+ var chats = [];
+ 
 client.on('connect', function() {
     console.info(color('Successfully connected to ' + host + ':' + port, "blink+green"));
 });
+
+client.on('state', function(newState) {
+  if (newState === states.PLAY) {
+    chats.forEach(function(chat) {
+      client.write(0x01, {message: chat});
+    });
+  }
+})
  
 rl.on('line', function(line) {
     if(line == '') {
@@ -95,15 +105,15 @@ rl.on('line', function(line) {
     } else if(line == '/quit') {
         var reason = 'disconnect.quitting';
         console.info('Disconnected from ' + host + ':' + port);
-        client.write(0xff, { reason: reason });	
+        client.write([states.PLAY, 0x40], { reason: reason });	
         return;
     } else if(line == '/end') {
         console.info('Forcibly ended client');
         process.exit(0);
         return;
     }
-    if (client.state == states.PLAY) {
-        client.write(0x01, {message: line});
+    if (!client.write([states.PLAY, 0x01], { message: line })) {
+      chats.push(line);
     }
 });
  

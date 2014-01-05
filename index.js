@@ -110,11 +110,11 @@ function createServer(options) {
         "favicon": server.favicon
       };
 
-      client.write(0x00, {response: JSON.stringify(response)});
       client.once([states.STATUS, 0x01], function(packet) {
         client.write(0x01, { time: packet.time });
         client.end();
       });
+      client.write(0x00, {response: JSON.stringify(response)});
     }
 
     function onLogin(packet) {
@@ -132,6 +132,7 @@ function createServer(options) {
         client.publicKey = new Buffer(publicKeyStr, 'base64');
         hash = crypto.createHash("sha1");
         hash.update(serverId);
+        client.once([states.LOGIN, 0x01], onEncryptionKeyResponse);
         client.write(0x01, {
           serverId: serverId,
           publicKey: client.publicKey,
@@ -172,6 +173,10 @@ function createServer(options) {
       function verifyUsername() {
         var digest = mcHexDigest(hash);
         validateSession(client.username, digest, function(err, uuid) {
+          if (err) {
+            client.end("Failed to verify username!");
+            return;
+          }
           client.UUID = uuid;
           loginClient();
         });
@@ -209,6 +214,7 @@ function createClient(options) {
   var haveCredentials = options.password != null || (clientToken != null && accessToken != null);
   var keepAlive = options.keepAlive == null ? true : options.keepAlive;
   var shouldParsePayload = options.parsePayload == null ? true : options.parsePayload;
+
 
 
   var client = new Client(false);
