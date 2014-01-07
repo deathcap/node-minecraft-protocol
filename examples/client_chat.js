@@ -44,7 +44,7 @@ var rl = readline.createInterface({
 });
  
 function print_help() {
-    console.log("usage: node minechat.js <hostname> <user> [<password>]");
+    console.log("usage: node client_chat.js <hostname> <user> [<password>]");
 }
  
 if (process.argv.length < 4) {
@@ -79,8 +79,8 @@ var client = mc.createClient({
     username: user,
     password: passwd
 });
- 
-client.on([states.PLAY, 0x40], function(packet) {
+
+client.on([states.PLAY, 0x40], function(packet) { // you can listen for packets by [state, id], too
     console.info(color('Kicked for ' + packet.reason, "blink+red"));
     process.exit(1);
 });
@@ -94,7 +94,7 @@ client.on('connect', function() {
 client.on('state', function(newState) {
   if (newState === states.PLAY) {
     chats.forEach(function(chat) {
-      client.write(0x01, {message: chat});
+      client.write('chat_message', {message: chat});
     });
   }
 })
@@ -117,7 +117,7 @@ rl.on('line', function(line) {
     }
 });
  
-client.on([states.PLAY, 0x02], function(packet) {
+client.on('chat', function(packet) {
     var j = JSON.parse(packet.message);
     var chat = parseChat(j, {});
     console.info(chat);
