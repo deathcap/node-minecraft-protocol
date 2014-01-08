@@ -217,9 +217,9 @@ function createClient(options) {
 
   var client = new Client(false);
   client.on('connect', onConnect);
-  if (keepAlive) client.on([states.PLAY, 0x00], onKeepAlive);
-  client.once([states.LOGIN, 0x01], onEncryptionKeyRequest);
-  client.once([states.LOGIN, 0x02], onLogin);
+  if (keepAlive) client.on('keep_alive', onKeepAlive);
+  client.once('encryption_request', onEncryptionKeyRequest);
+  client.once('login_success', onLogin);
 
   if (haveCredentials) {
     // make a request to get the case-correct username before connecting.
