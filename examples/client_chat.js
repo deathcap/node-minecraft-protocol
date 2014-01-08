@@ -80,7 +80,7 @@ var client = mc.createClient({
     password: passwd
 });
 
-client.on([states.PLAY, 0x40], function(packet) { // you can listen for packets by [state, id], too
+client.on('kicked', function(packet) {
     console.info(color('Kicked for ' + packet.reason, "blink+red"));
     process.exit(1);
 });
