@@ -167,14 +167,14 @@ describe("packets", function() {
       packet[field.name] = values[field.type];
     });
     if (toServer) {
-      serverClient.once(packetId, function(receivedPacket) {
+      serverClient.once([state, packetId], function(receivedPacket) {
         delete receivedPacket.id;
         assertPacketsMatch(packet, receivedPacket);
         done();
       });
       client.write(packetId, packet);
     } else {
-      client.once(packetId, function(receivedPacket) {
+      client.once([state, packetId], function(receivedPacket) {
         delete receivedPacket.id;
         assertPacketsMatch(packet, receivedPacket);
         done();
@@ -306,7 +306,7 @@ describe("client", function() {
         mcServer.stdin.write("say hello\n");
       });
       var chatCount = 0;
-      client.on('join_game', function(packet) {
+      client.on([states.PLAY, 0x01], function(packet) {
         assert.strictEqual(packet.levelType, 'default');
         assert.strictEqual(packet.difficulty, 1);
         assert.strictEqual(packet.dimension, 0);
@@ -315,7 +315,7 @@ describe("client", function() {
           message: "hello everyone; I have logged in."
         });
       });
-      client.on('chat', function(packet) {
+      client.on([states.PLAY, 0x02], function(packet) {
         chatCount += 1;
         assert.ok(chatCount <= 2);
         var message = JSON.parse(packet.message);
@@ -353,7 +353,7 @@ describe("client", function() {
         mcServer.stdin.write("say hello\n");
       });
       var chatCount = 0;
-      client.on('join_game', function(packet) {
+      client.on([states.PLAY, 0x01], function(packet) {
           assert.strictEqual(packet.levelType, 'default');
           assert.strictEqual(packet.difficulty, 1);
           assert.strictEqual(packet.dimension, 0);
@@ -362,7 +362,7 @@ describe("client", function() {
             message: "hello everyone; I have logged in."
           });
       });
-      client.on('chat', function(packet) {
+      client.on([states.PLAY, 0x02], function(packet) {
         chatCount += 1;
         assert.ok(chatCount <= 2);
         var message = JSON.parse(packet.message);
@@ -393,7 +393,7 @@ describe("client", function() {
         username: 'Player',
       });
       var gotKicked = false;
-      client.on('login_disconnect', function(packet) {
+      client.on([states.LOGIN, 0x00], function(packet) {
         assert.strictEqual(packet.reason, '"Failed to verify username!"');
         gotKicked = true;
       });
@@ -408,12 +408,12 @@ describe("client", function() {
       var client = mc.createClient({
         username: 'Player',
       });
-      client.on('join_game', function(packet) {
-        client.write('chat_message', {
+      client.on([states.PLAY, 0x01], function(packet) {
+        client.write(0x01, {
           message: "hello everyone; I have logged in."
         });
       });
-      client.on('chat', function(packet) {
+      client.on([states.PLAY, 0x02], function(packet) {
         var message = JSON.parse(packet.message);
         assert.strictEqual(message.translate, "chat.type.text");
         assert.deepEqual(message["with"][0], {
@@ -552,7 +552,7 @@ describe("mc-server", function() {
         difficulty: 2,
         maxPlayers: server.maxPlayers
       });
-      client.on('join_game', function(packet) {
+      client.on([states.PLAY, 0x01], function(packet) {
         var message = '<' + client.username + '>' + ' ' + packet.message;
         broadcast(message);
       });
@@ -560,7 +560,7 @@ describe("mc-server", function() {
     server.on('close', done);
     server.on('listening', function() {
       var player1 = mc.createClient({ username: 'player1' });
-      player1.on('join_game', function(packet) {
+      player1.on([states.PLAY, 0x01], function(packet) {
         assert.strictEqual(packet.gameMode, 1);
         assert.strictEqual(packet.levelType, 'default');
         assert.strictEqual(packet.dimension, 0);
@@ -634,7 +634,7 @@ describe("mc-server", function() {
         assert.strictEqual(reason, 'ServerShutdown');
         resolve();
       });
-      client.write('join_game', {
+      client.write(0x01, {
         entityId: client.id,
         levelType: 'default',
         gameMode: 1,
@@ -648,7 +648,7 @@ describe("mc-server", function() {
     });
     server.on('listening', function() {
       var client = mc.createClient({ username: 'lalalal', });
-      client.on('join_game', function() {
+      client.on([states.PLAY, 0x01], function() {
         server.close();
       });
     });
