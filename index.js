@@ -23,6 +23,7 @@ module.exports = {
   Server: Server,
   ping: require('./lib/ping'),
   protocol: protocol,
+  yggdrasil: Yggdrasil,
 };
 
 function createServer(options) {
@@ -138,7 +139,6 @@ function createServer(options) {
           publicKey: client.publicKey,
           verifyToken: client.verifyToken
         });
-        client.once([states.LOGIN, 0x01], onEncryptionKeyResponse);
       } else {
         loginClient();
       }
@@ -177,14 +177,14 @@ function createServer(options) {
             client.end("Failed to verify username!");
             return;
           }
-          client.UUID = uuid;
+          client.uuid = uuid;
           loginClient();
         });
       }
     }
 
     function loginClient() {
-      client.write(0x02, {uuid: (client.UUID | 0).toString(10), username: client.username});
+      client.write(0x02, {uuid: (client.uuid | 0).toString(10), username: client.username});
       client.state = states.PLAY;
       loggedIn = true;
       startKeepAlive();
@@ -217,9 +217,9 @@ function createClient(options) {
 
   var client = new Client(false);
   client.on('connect', onConnect);
-  if (keepAlive) client.on('keep_alive', onKeepAlive);
-  client.once('encryption_request', onEncryptionKeyRequest);
-  client.once('login_success', onLogin);
+  if (keepAlive) client.on([states.PLAY, 0x00], onKeepAlive);
+  client.once([states.LOGIN, 0x01], onEncryptionKeyRequest);
+  client.once([states.LOGIN, 0x02], onLogin);
 
   if (haveCredentials) {
     // make a request to get the case-correct username before connecting.

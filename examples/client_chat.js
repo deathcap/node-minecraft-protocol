@@ -80,7 +80,7 @@ var client = mc.createClient({
     password: passwd
 });
 
-client.on('kicked', function(packet) {
+client.on([states.PLAY, 0x40], function(packet) { // you can listen for packets by [state, id], too
     console.info(color('Kicked for ' + packet.reason, "blink+red"));
     process.exit(1);
 });
@@ -94,7 +94,7 @@ client.on('connect', function() {
 client.on('state', function(newState) {
   if (newState === states.PLAY) {
     chats.forEach(function(chat) {
-      client.write('chat_message', {message: chat});
+      client.write('chat', {message: chat});
     });
   }
 })
