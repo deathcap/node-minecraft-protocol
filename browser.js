@@ -1,4 +1,4 @@
 
 module.exports = {
-  protocol: require('./dist/protocol')
+  protocol: require('./src/protocol')
 };

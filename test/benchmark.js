@@ -1,9 +1,9 @@
 var ITERATIONS = 100000;
 
-var Client = require('../dist/client'),
+var Client = require('../src/client'),
   EventEmitter = require('events').EventEmitter,
   util = require('util'),
-  states = require('../dist/protocol').states;
+  states = require('../src/protocol').states;
 
 var FakeSocket = function() {
   EventEmitter.call(this);
