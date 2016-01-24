@@ -158,10 +158,7 @@ function writeAck(client, phase) {
     discriminator: 'HandshakeAck', // HandshakeAck,
     phase: phase
   });
-  client.write('custom_payload', {
-    channel: 'FML|HS',
-    data: ackData
-  });
+  client.outgoingPluginChannels.write('FML|HS', ackData);
 }
 
 var FMLHandshakeClientState = {
@@ -187,30 +184,21 @@ function fmlHandshakeStep(client, data)
         // TODO: support higher protocols, if they change
       }
 
-      client.write('custom_payload', {
-        channel: 'REGISTER',
-        data: new Buffer(['FML|HS', 'FML', 'FML|MP', 'FML', 'FORGE'].join('\0'))
-      });
+      client.outgoingPluginChannels.register('FML|HS', 'FML', 'FML|MP', 'FML', 'FORGE');
 
       var clientHello = proto.createPacketBuffer('FML|HS', {
         discriminator: 'ClientHello',
         fmlProtocolVersion: parsed.data.fmlProtocolVersion
       });
 
-      client.write('custom_payload', {
-        channel: 'FML|HS',
-        data: clientHello
-      });
+      client.outgoingPluginChannels.write('FML|HS', clientHello);
 
       debug('Sending client modlist');
       var modList = proto.createPacketBuffer('FML|HS', {
         discriminator: 'ModList',
         mods: client.forgeMods || []
       });
-      client.write('custom_payload', {
-        channel: 'FML|HS',
-        data: modList
-      });
+      client.outgoingPluginChannels.write('FML|HS', modList);
       writeAck(client, FMLHandshakeClientState.WAITINGSERVERDATA);
       client.fmlHandshakeState = FMLHandshakeClientState.WAITINGSERVERDATA;
       break;
