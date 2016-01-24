@@ -10,6 +10,8 @@ var states = require("./states");
 var debug = require("./debug");
 var UUID = require('uuid-1345');
 var fml = require('./fml');
+var IncomingPluginChannels = require('./pluginChannels').IncomingPluginChannels;
+var OutgoingPluginChannels = require('./pluginChannels').OutgoingPluginChannels;
 
 module.exports=createClient;
 
@@ -48,6 +50,8 @@ function createClient(options) {
   var client = new Client(false,version.majorVersion);
   client.forge = options.forge;
   client.forgeMods = options.forgeMods;
+  client.incomingPluginChannels = new IncomingPluginChannels(client);
+  client.outgoingPluginChannels = new OutgoingPluginChannels(client);
   client.on('connect', onConnect);
   if(keepAlive) client.on('keep_alive', onKeepAlive);
   client.once('encryption_begin', onEncryptionKeyRequest);
